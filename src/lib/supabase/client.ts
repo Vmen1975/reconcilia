@@ -6,13 +6,17 @@ let client: ReturnType<typeof createSupabaseClient> | null = null;
 
 // Puerto fijo para toda la aplicación
 const APP_PORT = 3001;
-const APP_URL = `http://localhost:${APP_PORT}`;
+// Usar URL dinámica para producción vs desarrollo
+const isDevelopment = typeof window !== 'undefined' && window.location.hostname === 'localhost';
+const APP_URL = isDevelopment 
+  ? `http://localhost:${APP_PORT}` 
+  : (process.env.NEXT_PUBLIC_APP_URL || 'https://reconcilia-q2xq3whp5-victor-menas-projects.vercel.app');
 
 export function createClient() {
   if (client) return client;
 
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
+  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
 
   if (!supabaseUrl || !supabaseAnonKey) {
     throw new Error('Faltan las variables de entorno de Supabase');
@@ -22,7 +26,7 @@ export function createClient() {
   console.log('URL de la aplicación:', APP_URL);
 
   // Crear un cliente Supabase con opciones optimizadas para el desarrollo local
-  client = createSupabaseClient(supabaseUrl, supabaseAnonKey, {
+  client = createSupabaseClient(supabaseUrl.trim(), supabaseAnonKey.trim(), {
     auth: {
       persistSession: true, // Mantener la sesión persistente
       autoRefreshToken: true,
@@ -37,12 +41,15 @@ export function createClient() {
           credentials: 'include' as RequestCredentials, // Incluir cookies
           headers: {
             ...options.headers,
-            'X-Client-Info': `web-app-${APP_PORT}`,
+            'X-Client-Info': `reconcilia-client`,
             'Origin': APP_URL,
           },
         };
         
-        return fetch(url, fetchOptions);
+        // Asegurarse que la URL no tiene espacios
+        const cleanUrl = typeof url === 'string' ? url.trim() : url;
+        
+        return fetch(cleanUrl, fetchOptions);
       },
     },
   });

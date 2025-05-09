@@ -6,7 +6,7 @@
     "dev": "node server.js",
     "build": "next build",
     "start": "NODE_ENV=production node server.js",
-    "vercel-build": "next build",
+    "vercel-build": "NEXT_PUBLIC_SUPABASE_URL=https://txctbngxizudxwjzgdef.supabase.co next build",
     "vercel-start": "next start",
     "lint": "next lint",
     "migrate-accounting": "tsx src/scripts/run-migration.ts",

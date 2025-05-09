@@ -1,10 +1,27 @@
 'use client';
 
-import { Suspense } from 'react';
+import { useState, useEffect } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
-import { HomeIcon, ChartBarIcon } from '@heroicons/react/24/outline';
+import { HomeIcon, ArrowLeftIcon } from '@heroicons/react/24/outline';
+import { useSession } from '@/hooks/useSession';
 
-function ReportsContent() {
+export default function ImportManagerContent() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const importId = searchParams?.get('id');
+  const importType = searchParams?.get('type');
+  const { session } = useSession();
+  
+  const [loading, setLoading] = useState(false);
+  
+  // Redireccionar si no hay ID o tipo
+  useEffect(() => {
+    if (!importId || !importType) {
+      router.push('/dashboard/reconciliation');
+    }
+  }, [importId, importType, router]);
+  
   return (
     <div className="min-h-screen bg-gray-100">
       {/* Barra de navegación lateral */}
@@ -23,15 +40,6 @@ function ReportsContent() {
                 Dashboard
               </Link>
             </li>
-            <li>
-              <Link 
-                href="/dashboard/reports" 
-                className="flex items-center px-2 py-2 text-sm font-medium rounded-md bg-indigo-50 text-indigo-600"
-              >
-                <ChartBarIcon className="mr-3 h-5 w-5 text-indigo-500" />
-                Informes
-              </Link>
-            </li>
           </ul>
         </nav>
       </div>
@@ -40,22 +48,30 @@ function ReportsContent() {
       <div className="pl-64">
         <div className="max-w-7xl mx-auto py-6 px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center mb-6">
-            <h1 className="text-2xl font-bold text-gray-900">
-              Informes y Reportes
-            </h1>
+            <div className="flex items-center">
+              <button 
+                onClick={() => router.back()}
+                className="mr-4 p-1 rounded-full hover:bg-gray-200"
+              >
+                <ArrowLeftIcon className="h-5 w-5 text-gray-600" />
+              </button>
+              <h1 className="text-2xl font-bold text-gray-900">
+                Gestión de Importación
+              </h1>
+            </div>
           </div>
           
           <div className="bg-white shadow overflow-hidden sm:rounded-lg">
             <div className="px-4 py-5 sm:px-6">
               <div className="text-center py-10">
-                <p className="text-gray-500 font-medium">Módulo de informes en desarrollo</p>
-                <p className="mt-2 text-gray-400">Próximamente disponible</p>
+                <p className="text-gray-500 font-medium">Esta página está en mantenimiento o actualizando</p>
+                <p className="mt-2 text-gray-400">Por favor, inténtalo más tarde</p>
                 <div className="mt-6">
                   <Link 
-                    href="/dashboard" 
+                    href="/dashboard/reconciliation" 
                     className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
                   >
-                    Volver al Dashboard
+                    Volver a Conciliación
                   </Link>
                 </div>
               </div>
@@ -64,15 +80,5 @@ function ReportsContent() {
         </div>
       </div>
     </div>
-  );
-}
-
-export default function ReportsPage() {
-  return (
-    <Suspense fallback={<div className="flex justify-center items-center min-h-screen">
-      <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600"></div>
-    </div>}>
-      <ReportsContent />
-    </Suspense>
   );
 } 

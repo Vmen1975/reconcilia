@@ -1,5 +1,10 @@
 import { LoginForm } from '@/components/auth/LoginForm';
+import { Suspense } from 'react';
 
 export default function SignInPage() {
-  return <LoginForm />;
+  return (
+    <Suspense fallback={<div>Cargando...</div>}>
+      <LoginForm />
+    </Suspense>
+  );
 } 

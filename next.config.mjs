@@ -2,31 +2,39 @@
 const nextConfig = {
   /* config options here */
   env: {
-    NEXT_PUBLIC_SUPABASE_URL: process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://txctbngxizudxwjzgdef.supabase.co',
+    NEXT_PUBLIC_SUPABASE_URL: process.env.NEXT_PUBLIC_SUPABASE_URL,
     NEXT_PUBLIC_SUPABASE_ANON_KEY: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
     SUPABASE_SERVICE_ROLE_KEY: process.env.SUPABASE_SERVICE_ROLE_KEY,
     NEXT_PUBLIC_APP_URL: process.env.NEXT_PUBLIC_APP_URL || 'https://reconcilia-victor-menas-projects.vercel.app',
   },
   output: 'standalone',
   eslint: {
-    // Permitir producción con warnings
     ignoreDuringBuilds: true,
   },
   typescript: {
-    // Ignorar errores de TS durante el build
     ignoreBuildErrors: true,
   },
+  // Prevenir compilación estática
+  staticPageGenerationTimeout: 1000,
   experimental: {
+    // Deshabilitar SSG completamente
+    appDocumentPreloading: false,
     serverActions: {
-      allowedOrigins: ["localhost:3001", "reconcilia.vercel.app"]
+      allowedOrigins: ["localhost:3001", "reconcilia-victor-menas-projects.vercel.app"]
     }
   },
-  // Forzar el modo dinámico para todas las rutas
-  staticPageGenerationTimeout: 120,
   images: {
     unoptimized: true,
   },
-  // Estas opciones desactivan la generación estática
+  // Forzar SSR para todas las páginas
+  compiler: {
+    emotion: true,
+  },
+  // Configuraciones para deshabilitar la generación estática
+  generateEtags: false,
+  compress: true,
+  poweredByHeader: false,
+  reactStrictMode: false,
   headers: async () => {
     return [
       {
@@ -50,4 +58,4 @@ const nextConfig = {
   },
 };
 
-module.exports = nextConfig; 
+export default nextConfig; 

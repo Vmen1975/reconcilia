@@ -23,7 +23,7 @@ interface BankAccount {
 
 export default function BankAccountsPage() {
   const router = useRouter();
-  const supabase = createClientComponentClient();
+  const [supabase, setSupabase] = useState<any>(null);
   
   // Estados
   const [loading, setLoading] = useState(true);
@@ -43,13 +43,32 @@ export default function BankAccountsPage() {
   
   const [selectedAccount, setSelectedAccount] = useState<BankAccount | null>(null);
   
-  // Cargar datos al inicio
+  // Inicializar Supabase client de forma segura
   useEffect(() => {
-    loadBankAccounts();
+    // Solo inicializar el cliente en el navegador
+    if (typeof window !== 'undefined') {
+      try {
+        const supabaseClient = createClientComponentClient();
+        setSupabase(supabaseClient);
+      } catch (error) {
+        console.error('Error al inicializar cliente Supabase:', error);
+        setErrorMessage('Error al conectar con el servicio de autenticación.');
+        setLoading(false);
+      }
+    }
   }, []);
+  
+  // Cargar datos cuando el cliente esté disponible
+  useEffect(() => {
+    if (supabase) {
+      loadBankAccounts();
+    }
+  }, [supabase]);
   
   // Función para cargar cuentas bancarias
   const loadBankAccounts = async () => {
+    if (!supabase) return;
+    
     setLoading(true);
     setErrorMessage(null);
     
@@ -116,6 +135,8 @@ export default function BankAccountsPage() {
   // Función para guardar una nueva cuenta
   const handleSaveNewAccount = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!supabase) return;
+    
     setErrorMessage(null);
     
     try {
@@ -183,9 +204,9 @@ export default function BankAccountsPage() {
   // Función para actualizar una cuenta existente
   const handleUpdateAccount = async (e: React.FormEvent) => {
     e.preventDefault();
-    setErrorMessage(null);
+    if (!supabase || !selectedAccount) return;
     
-    if (!selectedAccount) return;
+    setErrorMessage(null);
     
     try {
       // Datos a actualizar en Supabase - Incluir todos los campos
@@ -239,6 +260,8 @@ export default function BankAccountsPage() {
   
   // Función para eliminar una cuenta
   const handleDeleteAccount = async (id: string) => {
+    if (!supabase) return;
+    
     if (!window.confirm('¿Está seguro que desea eliminar esta cuenta?')) {
       return;
     }
@@ -647,6 +670,10 @@ export default function BankAccountsPage() {
                   <div className="px-4 py-5 sm:p-6 text-center">
                     <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-indigo-500 mx-auto"></div>
                     <p className="mt-2 text-sm text-gray-500">Cargando cuentas bancarias...</p>
+                  </div>
+                ) : !supabase ? (
+                  <div className="px-4 py-5 sm:p-6 text-center">
+                    <p className="text-sm text-red-500">Error al conectar con el servicio. Por favor, recargue la página.</p>
                   </div>
                 ) : bankAccounts.length === 0 ? (
                   <div className="px-4 py-5 sm:p-6 text-center">

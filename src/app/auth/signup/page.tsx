@@ -1,5 +1,10 @@
 import { SignupForm } from '@/components/auth/SignupForm';
+import { Suspense } from 'react';
 
 export default function SignUpPage() {
-  return <SignupForm />;
+  return (
+    <Suspense fallback={<div>Cargando...</div>}>
+      <SignupForm />
+    </Suspense>
+  );
 } 
