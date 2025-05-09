@@ -1,22 +1,25 @@
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
 
+// Exportar directamente la función getBankAccounts para compatibilidad con código existente
+export const getBankAccounts = async (companyId: string) => {
+  const supabase = createClientComponentClient();
+  
+  const { data, error } = await supabase
+    .from('bank_accounts')
+    .select('*')
+    .eq('company_id', companyId)
+    .order('name', { ascending: true });
+    
+  if (error) {
+    console.error('Error al obtener cuentas bancarias:', error);
+    throw error;
+  }
+  
+  return data || [];
+};
+
 export const bankAccountsService = {
-  async getBankAccounts(companyId: string) {
-    const supabase = createClientComponentClient();
-    
-    const { data, error } = await supabase
-      .from('bank_accounts')
-      .select('*')
-      .eq('company_id', companyId)
-      .order('name', { ascending: true });
-      
-    if (error) {
-      console.error('Error al obtener cuentas bancarias:', error);
-      throw error;
-    }
-    
-    return data || [];
-  },
+  getBankAccounts,
   
   async getBankAccountById(id: string) {
     const supabase = createClientComponentClient();
