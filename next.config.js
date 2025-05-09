@@ -9,7 +9,9 @@ const nextConfig = {
   },
   output: 'standalone',
   experimental: {
-    serverActions: true,
+    serverActions: {
+      allowedOrigins: ["localhost:3001", "reconcilia.vercel.app"]
+    }
   },
   headers: async () => {
     return [
