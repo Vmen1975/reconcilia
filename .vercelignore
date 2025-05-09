@@ -1,0 +1,8 @@
+.env
+.env.local
+node_modules
+.git
+.github
+README-IMPLEMENTACION.md
+tmp-fixes/
+docs/ 

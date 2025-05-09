@@ -1,8 +1,10 @@
 {
   "version": 2,
-  "buildCommand": "npm run build",
+  "buildCommand": "next build",
   "devCommand": "npm run dev",
   "outputDirectory": ".next",
+  "framework": "nextjs",
+  "installCommand": "npm install",
   "functions": {
     "api/supabase/*": {
       "memory": 1024,
