@@ -1,0 +1,11 @@
+fecha,descripcion,monto,referencia
+2024-01-15,Factura Proveedor ABC,1500.00,FAC001
+2024-01-16,Ingreso Cliente XYZ,-2000.00,ING001
+2024-01-17,Gastos Operativos,750.50,GAS001
+2024-01-18,Servicios Básicos,250.00,SER001
+2024-01-19,Registro Depósito,-1000.00,DEP001
+2024-01-20,Pago Proveedor DEF,2500.00,FAC002
+2024-01-21,Nómina Mensual,3500.00,NOM001
+2024-01-22,Registro Ventas,-4500.00,VEN001
+2024-01-23,Gastos Bancarios,25.00,BAN001
+2024-01-24,Cobro Cliente ABC,-1750.00,COB001 

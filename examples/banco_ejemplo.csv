@@ -1,0 +1,11 @@
+fecha,descripcion,monto,referencia
+2024-01-15,Pago Proveedor ABC,-1500.00,REF001
+2024-01-16,Depósito Cliente XYZ,2000.00,REF002
+2024-01-17,Transferencia Saliente,-750.50,REF003
+2024-01-18,Pago Servicios,-250.00,REF004
+2024-01-19,Depósito en Efectivo,1000.00,REF005
+2024-01-20,Cheque #1234,-2500.00,REF006
+2024-01-21,Pago Nómina,-3500.00,REF007
+2024-01-22,Ingreso por Ventas,4500.00,REF008
+2024-01-23,Comisión Bancaria,-25.00,REF009
+2024-01-24,Transferencia Entrante,1750.00,REF010 
