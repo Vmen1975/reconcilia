@@ -4,19 +4,20 @@ import { createClient as createSupabaseClient } from '@supabase/supabase-js';
 
 let client: ReturnType<typeof createSupabaseClient> | null = null;
 
-// Puerto fijo para toda la aplicación
+// Puerto fijo para toda la aplicación en desarrollo
 const APP_PORT = 3001;
-// Usar URL dinámica para producción vs desarrollo
+
+// Detectar si estamos en producción y usar la URL correspondiente
 const isDevelopment = typeof window !== 'undefined' && window.location.hostname === 'localhost';
 const APP_URL = isDevelopment 
   ? `http://localhost:${APP_PORT}` 
-  : (process.env.NEXT_PUBLIC_APP_URL || 'https://reconcilia-q2xq3whp5-victor-menas-projects.vercel.app');
+  : (process.env.NEXT_PUBLIC_APP_URL || 'https://app.concilia.dammaq.cl');
 
 export function createClient() {
   if (client) return client;
 
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
-  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
+  const supabaseUrl = (process.env.NEXT_PUBLIC_SUPABASE_URL || '').trim();
+  const supabaseAnonKey = (process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '').trim();
 
   if (!supabaseUrl || !supabaseAnonKey) {
     throw new Error('Faltan las variables de entorno de Supabase');
@@ -25,10 +26,10 @@ export function createClient() {
   console.log('Creando cliente Supabase con URL:', supabaseUrl);
   console.log('URL de la aplicación:', APP_URL);
 
-  // Crear un cliente Supabase con opciones optimizadas para el desarrollo local
-  client = createSupabaseClient(supabaseUrl.trim(), supabaseAnonKey.trim(), {
+  // Crear un cliente Supabase con opciones optimizadas
+  client = createSupabaseClient(supabaseUrl, supabaseAnonKey, {
     auth: {
-      persistSession: true, // Mantener la sesión persistente
+      persistSession: true,
       autoRefreshToken: true,
       detectSessionInUrl: true,
       flowType: 'pkce',
@@ -38,7 +39,7 @@ export function createClient() {
         // Asegurarse de que las cookies se envíen con la solicitud
         const fetchOptions = {
           ...options,
-          credentials: 'include' as RequestCredentials, // Incluir cookies
+          credentials: 'include' as RequestCredentials,
           headers: {
             ...options.headers,
             'X-Client-Info': `reconcilia-client`,

@@ -5,7 +5,7 @@ const nextConfig = {
     NEXT_PUBLIC_SUPABASE_URL: process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://txctbngxizudxwjzgdef.supabase.co',
     NEXT_PUBLIC_SUPABASE_ANON_KEY: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
     SUPABASE_SERVICE_ROLE_KEY: process.env.SUPABASE_SERVICE_ROLE_KEY,
-    NEXT_PUBLIC_APP_URL: process.env.NEXT_PUBLIC_APP_URL || 'https://reconcilia-victor-menas-projects.vercel.app',
+    NEXT_PUBLIC_APP_URL: process.env.NEXT_PUBLIC_APP_URL || 'https://app.concilia.dammaq.cl',
   },
   output: 'standalone',
   eslint: {
@@ -25,6 +25,16 @@ const nextConfig = {
   staticPageGenerationTimeout: 120,
   images: {
     unoptimized: true,
+  },
+  poweredByHeader: false,
+  // Mejorar el manejo de rutas API
+  async rewrites() {
+    return [
+      {
+        source: '/api/:path*',
+        destination: '/api/:path*',
+      },
+    ];
   },
   // Estas opciones desactivan la generación estática
   headers: async () => {

@@ -10,7 +10,10 @@ export async function GET(
   try {
     const id = params.id;
     
+    console.log('GET /api/bank-accounts/:id - ID recibido:', id);
+    
     if (!id) {
+      console.error('ID de cuenta bancaria no proporcionado');
       return NextResponse.json(
         { error: 'Se requiere ID de cuenta bancaria' },
         { status: 400 }
@@ -21,36 +24,56 @@ export async function GET(
     const supabase = createRouteHandlerClient({ cookies: () => cookieStore });
     
     // Verificar si el usuario está autenticado
-    const { data: { session } } = await supabase.auth.getSession();
+    const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+    
+    if (sessionError) {
+      console.error('Error al obtener sesión:', sessionError);
+      return NextResponse.json(
+        { error: 'Error al verificar autenticación' },
+        { status: 500 }
+      );
+    }
+    
     if (!session) {
+      console.error('Usuario no autenticado intentando acceder a cuenta bancaria:', id);
       return NextResponse.json(
         { error: 'No autenticado' },
         { status: 401 }
       );
     }
     
-    // Obtener la cuenta bancaria
-    const { data: bankAccount, error } = await supabase
+    // Obtener la cuenta bancaria por ID
+    const { data: bankAccount, error: bankAccountError } = await supabase
       .from('bank_accounts')
-      .select('*, companies!inner(id)')
+      .select('*, companies:company_id(*)')
       .eq('id', id)
       .single();
     
-    if (error) {
+    if (bankAccountError) {
+      console.error('Error al obtener cuenta bancaria:', bankAccountError, 'ID:', id);
+      
+      if (bankAccountError.code === 'PGRST116' || bankAccountError.message.includes('no rows')) {
+        return NextResponse.json(
+          { error: 'Cuenta bancaria no encontrada' },
+          { status: 404 }
+        );
+      }
+      
       return NextResponse.json(
-        { error: error.message },
-        { status: error.code === 'PGRST116' ? 404 : 500 }
+        { error: bankAccountError.message },
+        { status: 500 }
       );
     }
     
     if (!bankAccount) {
+      console.error('Cuenta bancaria no encontrada:', id);
       return NextResponse.json(
         { error: 'Cuenta bancaria no encontrada' },
         { status: 404 }
       );
     }
     
-    // Verificar si el usuario tiene acceso a esta empresa
+    // Verificar si el usuario tiene acceso a la empresa de esta cuenta bancaria
     const { data: userCompany, error: userCompanyError } = await supabase
       .from('user_companies')
       .select('*')
@@ -63,18 +86,20 @@ export async function GET(
     }
     
     if (!userCompany) {
+      console.error('Usuario sin acceso a la empresa de esta cuenta bancaria:', 
+                   'Usuario:', session.user.id, 
+                   'Cuenta bancaria:', id,
+                   'Empresa:', bankAccount.company_id);
       return NextResponse.json(
         { error: 'No tienes acceso a esta cuenta bancaria' },
         { status: 403 }
       );
     }
     
-    // Eliminar la información redundante
-    delete bankAccount.companies;
-    
+    console.log('Cuenta bancaria obtenida exitosamente:', id);
     return NextResponse.json(bankAccount);
   } catch (error) {
-    console.error('Error al obtener cuenta bancaria:', error);
+    console.error('Error inesperado al obtener cuenta bancaria:', error, 'Params:', params);
     const errorMessage = error instanceof Error ? error.message : 'Error desconocido';
     
     return NextResponse.json(
@@ -92,7 +117,10 @@ export async function PUT(
   try {
     const id = params.id;
     
+    console.log('PUT /api/bank-accounts/:id - ID recibido:', id);
+    
     if (!id) {
+      console.error('ID de cuenta bancaria no proporcionado');
       return NextResponse.json(
         { error: 'Se requiere ID de cuenta bancaria' },
         { status: 400 }
@@ -103,34 +131,56 @@ export async function PUT(
     const supabase = createRouteHandlerClient({ cookies: () => cookieStore });
     
     // Verificar si el usuario está autenticado
-    const { data: { session } } = await supabase.auth.getSession();
+    const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+    
+    if (sessionError) {
+      console.error('Error al obtener sesión:', sessionError);
+      return NextResponse.json(
+        { error: 'Error al verificar autenticación' },
+        { status: 500 }
+      );
+    }
+    
     if (!session) {
+      console.error('Usuario no autenticado intentando actualizar cuenta bancaria:', id);
       return NextResponse.json(
         { error: 'No autenticado' },
         { status: 401 }
       );
     }
     
-    // Obtener la cuenta bancaria actual para verificar permisos
-    const { data: bankAccount, error: bankAccountError } = await supabase
+    // Obtener los datos actualizados
+    const requestData = await request.json();
+    console.log('Datos recibidos para actualización:', requestData);
+    
+    // Primero, verificar si la cuenta existe y obtener su company_id
+    const { data: existingAccount, error: getError } = await supabase
       .from('bank_accounts')
       .select('company_id')
       .eq('id', id)
       .single();
-    
-    if (bankAccountError || !bankAccount) {
+      
+    if (getError) {
+      console.error('Error al verificar cuenta bancaria existente:', getError);
       return NextResponse.json(
-        { error: bankAccountError?.message || 'Cuenta bancaria no encontrada' },
+        { error: getError.message },
+        { status: getError.code === 'PGRST116' ? 404 : 500 }
+      );
+    }
+    
+    if (!existingAccount) {
+      return NextResponse.json(
+        { error: 'Cuenta bancaria no encontrada' },
         { status: 404 }
       );
     }
     
-    // Verificar si el usuario tiene acceso a esta empresa
+    // Verificar si el usuario tiene acceso a la empresa de esta cuenta
     const { data: userCompany, error: userCompanyError } = await supabase
       .from('user_companies')
       .select('*')
       .eq('user_id', session.user.id)
-      .eq('company_id', bankAccount.company_id)
+      .eq('company_id', existingAccount.company_id)
       .maybeSingle();
       
     if (userCompanyError) {
@@ -138,41 +188,35 @@ export async function PUT(
     }
     
     if (!userCompany) {
+      console.error('Usuario sin acceso a la empresa de esta cuenta bancaria para actualización', 
+                   'Usuario:', session.user.id, 
+                   'Cuenta bancaria:', id);
       return NextResponse.json(
         { error: 'No tienes acceso a esta cuenta bancaria' },
         { status: 403 }
       );
     }
     
-    // Obtener los datos a actualizar
-    const requestData = await request.json();
-    
-    // Eliminar campos que no se deben modificar
-    delete requestData.id;
-    delete requestData.company_id; // No permitir cambiar la empresa asociada
-    delete requestData.created_at;
-    
     // Actualizar la cuenta bancaria
-    const { data: updatedBankAccount, error } = await supabase
+    const { data, error } = await supabase
       .from('bank_accounts')
-      .update({
-        ...requestData,
-        updated_at: new Date().toISOString()
-      })
+      .update(requestData)
       .eq('id', id)
       .select()
       .single();
-    
+      
     if (error) {
+      console.error('Error al actualizar cuenta bancaria:', error);
       return NextResponse.json(
         { error: error.message },
         { status: 500 }
       );
     }
     
-    return NextResponse.json(updatedBankAccount);
+    console.log('Cuenta bancaria actualizada exitosamente:', id);
+    return NextResponse.json(data);
   } catch (error) {
-    console.error('Error al actualizar cuenta bancaria:', error);
+    console.error('Error inesperado al actualizar cuenta bancaria:', error);
     const errorMessage = error instanceof Error ? error.message : 'Error desconocido';
     
     return NextResponse.json(
