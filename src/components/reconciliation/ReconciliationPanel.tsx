@@ -53,6 +53,14 @@ function ReconciliationPanelContent({ bankAccountId, dateRange }: Reconciliation
   const [localAccountingEntries, setLocalAccountingEntries] = useState<AccountingEntry[]>([]);
   // Flag para indicar si estamos usando el estado local
   const [isUsingLocalEntries, setIsUsingLocalEntries] = useState(false);
+  
+  // NUEVO: Estado local para el contador de registros contables y resumen
+  const [localReconciliationSummary, setLocalReconciliationSummary] = useState<{
+    reconciledCount: number;
+    totalCount: number;
+    reconciledAmount: number;
+    pendingAmount: number;
+  } | null>(null);
 
   console.log('🔄 Renderizando ReconciliationPanel:', { 
     bankAccountId, 
@@ -422,6 +430,17 @@ function ReconciliationPanelContent({ bankAccountId, dateRange }: Reconciliation
         }
       });
       
+      // NUEVO: Actualizar el estado local con el resumen calculado para que esté disponible
+      // cuando necesitemos modificarlo localmente después de una conciliación
+      if (localReconciliationSummary === null) {
+        setLocalReconciliationSummary({
+          reconciledCount,
+          totalCount,
+          reconciledAmount,
+          pendingAmount
+        });
+      }
+      
       return {
         reconciledCount,
         totalCount,
@@ -437,7 +456,14 @@ function ReconciliationPanelContent({ bankAccountId, dateRange }: Reconciliation
         pendingAmount: 0
       };
     }
-  }, [bankTransactions, matches]);
+  }, [bankTransactions, matches, localReconciliationSummary]);
+
+  // NUEVO: Seleccionar el resumen a mostrar basado en si estamos usando estado local
+  const displayedSummary = useMemo(() => {
+    return localReconciliationSummary && isUsingLocalEntries 
+      ? localReconciliationSummary 
+      : reconciliationSummary;
+  }, [reconciliationSummary, localReconciliationSummary, isUsingLocalEntries]);
 
   // Efecto para sincronizar el estado local con los datos de la consulta cuando se cargan inicialmente
   useEffect(() => {
@@ -461,6 +487,14 @@ function ReconciliationPanelContent({ bankAccountId, dateRange }: Reconciliation
     console.log('🔍 Filtros cambiados, reiniciando estado local');
     setIsUsingLocalEntries(false);
   }, [filters]);
+
+  // Reiniciar el estado local cuando se completa la refetching de datos para asegurar consistencia
+  useEffect(() => {
+    if (!loadingEntries && !loadingTransactions && !loadingMatches) {
+      console.log('🔄 Todas las consultas completadas, reiniciando el estado local del resumen');
+      setLocalReconciliationSummary(null);
+    }
+  }, [loadingEntries, loadingTransactions, loadingMatches]);
 
   // Mutación para crear conciliación
   const createMatchMutation = useMutation({
@@ -486,6 +520,22 @@ function ReconciliationPanelContent({ bankAccountId, dateRange }: Reconciliation
         currentEntries.filter(entry => entry.id !== entryIdToRemove)
       );
       setIsUsingLocalEntries(true);
+      
+      // NUEVO: Actualizar el contador y resumen de conciliación de forma local
+      // Buscar la transacción que estamos conciliando para actualizar los montos
+      const transaction = bankTransactions.find(tx => tx.id === variables.bankTransactionId);
+      
+      if (transaction && localReconciliationSummary) {
+        setLocalReconciliationSummary(prev => {
+          if (!prev) return null;
+          return {
+            reconciledCount: prev.reconciledCount + 1,
+            totalCount: prev.totalCount,
+            reconciledAmount: prev.reconciledAmount + transaction.amount,
+            pendingAmount: prev.pendingAmount - transaction.amount
+          };
+        });
+      }
       
       // Invalidar consultas para actualizar los datos en segundo plano
       queryClient.invalidateQueries({ queryKey: ['reconciliations', bankAccountId] });
@@ -525,6 +575,27 @@ function ReconciliationPanelContent({ bankAccountId, dateRange }: Reconciliation
       // Buscar el match que se está eliminando para obtener el ID del registro contable
       const matchToDelete = matches.find(m => m.id === variables);
       
+      // Buscar la transacción bancaria asociada para actualizar el resumen
+      if (matchToDelete) {
+        const relatedTransaction = bankTransactions.find(tx => 
+          tx.id === matchToDelete.bank_transaction_id
+        );
+        
+        if (relatedTransaction && localReconciliationSummary) {
+          // Actualizar el resumen local
+          setLocalReconciliationSummary(prev => {
+            if (!prev) return null;
+            return {
+              reconciledCount: Math.max(0, prev.reconciledCount - 1), // Evitar valores negativos
+              totalCount: prev.totalCount,
+              reconciledAmount: prev.reconciledAmount - relatedTransaction.amount,
+              pendingAmount: prev.pendingAmount + relatedTransaction.amount
+            };
+          });
+          setIsUsingLocalEntries(true);
+        }
+      }
+      
       // Invalidar las consultas
       queryClient.invalidateQueries({ queryKey: ['reconciliations', bankAccountId] });
       queryClient.invalidateQueries({ queryKey: ['bankTransactions', bankAccountId] });
@@ -535,7 +606,17 @@ function ReconciliationPanelContent({ bankAccountId, dateRange }: Reconciliation
       queryClient.refetchQueries({ queryKey: ['accountingEntries', bankAccountId] });
       
       // Desactivar el uso del estado local para permitir que los datos actualizados se muestren
+      // (solo para los registros contables, el resumen lo mantenemos actualizado manualmente)
       setIsUsingLocalEntries(false);
+      
+      // Añadir un efecto visual destacado - resaltar la lista de registros contables
+      const entriesContainer = document.querySelector('.accounting-entries-container');
+      if (entriesContainer) {
+        entriesContainer.classList.add('highlight-updated');
+        setTimeout(() => {
+          entriesContainer.classList.remove('highlight-updated');
+        }, 1000);
+      }
     }
   });
 
@@ -1052,7 +1133,7 @@ function ReconciliationPanelContent({ bankAccountId, dateRange }: Reconciliation
         <div className="flex flex-col">
           <div className="bg-white p-4 rounded-t-lg border-b shadow-sm z-10">
             <div className="flex justify-between items-center">
-              <h3 className="text-lg font-semibold">Registros Contables {accountingEntries.length > 0 && `(${accountingEntries.length})`}</h3>
+              <h3 className="text-lg font-semibold">Registros Contables {(isUsingLocalEntries ? localAccountingEntries : accountingEntries).length > 0 && `(${(isUsingLocalEntries ? localAccountingEntries : accountingEntries).length})`}</h3>
               <div className="flex items-center gap-3 text-xs">
                 <div className="flex items-center">
                   <div className="w-3 h-3 rounded-full bg-teal-100 border border-teal-200 mr-1"></div>
@@ -1111,19 +1192,19 @@ function ReconciliationPanelContent({ bankAccountId, dateRange }: Reconciliation
           <div className="grid grid-cols-3 gap-4">
             <div className="bg-white p-4 rounded-lg border">
               <div className="text-2xl font-bold">
-                {reconciliationSummary.reconciledCount} / {reconciliationSummary.totalCount}
+                {displayedSummary.reconciledCount} / {displayedSummary.totalCount}
               </div>
               <div className="text-sm text-gray-600">Transacciones conciliadas</div>
             </div>
             <div className="bg-white p-4 rounded-lg border">
               <div className="text-2xl font-bold text-green-600">
-                {formatMoney(reconciliationSummary.reconciledAmount)}
+                {formatMoney(displayedSummary.reconciledAmount)}
               </div>
               <div className="text-sm text-gray-600">Monto conciliado</div>
             </div>
             <div className="bg-white p-4 rounded-lg border">
               <div className="text-2xl font-bold text-yellow-600">
-                {formatMoney(reconciliationSummary.pendingAmount)}
+                {formatMoney(displayedSummary.pendingAmount)}
               </div>
               <div className="text-sm text-gray-600">Monto pendiente</div>
             </div>
