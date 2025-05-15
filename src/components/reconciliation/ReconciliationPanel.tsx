@@ -452,14 +452,20 @@ function ReconciliationPanelContent({ bankAccountId, dateRange }: Reconciliation
       
       // Invalidar consultas para actualizar los datos
       queryClient.invalidateQueries({ queryKey: ['reconciliations', bankAccountId] });
-      
-      // Invalidar y refrescar explícitamente tanto transacciones bancarias como registros contables
       queryClient.invalidateQueries({ queryKey: ['bankTransactions', bankAccountId] });
       queryClient.invalidateQueries({ queryKey: ['accountingEntries', bankAccountId] });
       
       // Forzar la actualización inmediata de los datos
       queryClient.refetchQueries({ queryKey: ['bankTransactions', bankAccountId] });
       queryClient.refetchQueries({ queryKey: ['accountingEntries', bankAccountId] });
+      
+      // Actualización local inmediata: Filtrar el registro contable conciliado
+      // Esto garantiza que el panel se actualice visualmente incluso antes de que las consultas se completen
+      const accountingEntryId = variables.accountingEntryId;
+      queryClient.setQueryData(['accountingEntries', bankAccountId, filters], (old: AccountingEntry[] | undefined) => {
+        if (!old) return [];
+        return old.filter(entry => entry.id !== accountingEntryId);
+      });
     },
     onError: (error) => {
       // Mostrar notificación de error
@@ -478,7 +484,10 @@ function ReconciliationPanelContent({ bankAccountId, dateRange }: Reconciliation
   // Mutación para eliminar conciliación
   const deleteMatchMutation = useMutation({
     mutationFn: reconciliationService.deleteMatch,
-    onSuccess: () => {
+    onSuccess: (_, variables) => {
+      // Buscar el match que se está eliminando para obtener el ID del registro contable
+      const matchToDelete = matches.find(m => m.id === variables);
+      
       // Invalidar las consultas
       queryClient.invalidateQueries({ queryKey: ['reconciliations', bankAccountId] });
       queryClient.invalidateQueries({ queryKey: ['bankTransactions', bankAccountId] });
@@ -487,6 +496,39 @@ function ReconciliationPanelContent({ bankAccountId, dateRange }: Reconciliation
       // Forzar la actualización inmediata de los datos para ambos paneles
       queryClient.refetchQueries({ queryKey: ['bankTransactions', bankAccountId] });
       queryClient.refetchQueries({ queryKey: ['accountingEntries', bankAccountId] });
+      
+      // Si encontramos la conciliación, actualizar localmente el registro contable para mostrarlo inmediatamente
+      if (matchToDelete && matchToDelete.accounting_entry_id) {
+        // Usamos una función asíncrona autoinvocada para manejar la promesa
+        (async () => {
+          try {
+            // Buscar el registro contable actualizado para añadirlo nuevamente al estado
+            const { data, error } = await supabase
+              .from('accounting_entries')
+              .select('*')
+              .eq('id', matchToDelete.accounting_entry_id)
+              .single();
+            
+            if (error) {
+              throw error;
+            }
+            
+            if (data) {
+              // Actualizar el estado local añadiendo el registro contable nuevamente
+              queryClient.setQueryData(['accountingEntries', bankAccountId, filters], (old: AccountingEntry[] | undefined) => {
+                if (!old) return [data];
+                // Verificar si ya existe para evitar duplicados
+                if (!old.some(e => e.id === data.id)) {
+                  return [...old, data];
+                }
+                return old;
+              });
+            }
+          } catch (error) {
+            console.error('Error al obtener registro contable después de eliminar conciliación:', error);
+          }
+        })();
+      }
     }
   });
 
