@@ -48,6 +48,11 @@ function ReconciliationPanelContent({ bankAccountId, dateRange }: Reconciliation
   const [recentlyReconciledTxs, setRecentlyReconciledTxs] = useState<string[]>([]);
   const [showNotification, setShowNotification] = useState(false);
   const [notificationMessage, setNotificationMessage] = useState('');
+  
+  // Estado local para controlar directamente los registros contables visibles
+  const [localAccountingEntries, setLocalAccountingEntries] = useState<AccountingEntry[]>([]);
+  // Flag para indicar si estamos usando el estado local
+  const [isUsingLocalEntries, setIsUsingLocalEntries] = useState(false);
 
   console.log('🔄 Renderizando ReconciliationPanel:', { 
     bankAccountId, 
@@ -434,6 +439,29 @@ function ReconciliationPanelContent({ bankAccountId, dateRange }: Reconciliation
     }
   }, [bankTransactions, matches]);
 
+  // Efecto para sincronizar el estado local con los datos de la consulta cuando se cargan inicialmente
+  useEffect(() => {
+    if (accountingEntries && accountingEntries.length > 0 && !isUsingLocalEntries) {
+      console.log('🔄 Actualizando estado local de registros contables desde consulta. Entradas:', accountingEntries.length);
+      setLocalAccountingEntries(accountingEntries);
+    }
+  }, [accountingEntries, isUsingLocalEntries]);
+
+  // Log de cambios en el estado local
+  useEffect(() => {
+    console.log('📊 Estado actual de registros contables:', { 
+      isUsingLocalEntries,
+      localEntriesCount: localAccountingEntries.length,
+      queryEntriesCount: accountingEntries.length
+    });
+  }, [localAccountingEntries, accountingEntries, isUsingLocalEntries]);
+
+  // Reiniciar el estado local cuando cambian los filtros
+  useEffect(() => {
+    console.log('🔍 Filtros cambiados, reiniciando estado local');
+    setIsUsingLocalEntries(false);
+  }, [filters]);
+
   // Mutación para crear conciliación
   const createMatchMutation = useMutation({
     mutationFn: reconciliationService.createMatch,
@@ -450,22 +478,31 @@ function ReconciliationPanelContent({ bankAccountId, dateRange }: Reconciliation
         setShowNotification(false);
       }, 3000);
       
-      // Invalidar consultas para actualizar los datos
+      // Actualizar inmediatamente el estado local para eliminar visualmente el registro conciliado
+      const entryIdToRemove = variables.accountingEntryId;
+      console.log('🔄 Eliminando registro contable del estado local:', entryIdToRemove);
+      
+      setLocalAccountingEntries(currentEntries => 
+        currentEntries.filter(entry => entry.id !== entryIdToRemove)
+      );
+      setIsUsingLocalEntries(true);
+      
+      // Invalidar consultas para actualizar los datos en segundo plano
       queryClient.invalidateQueries({ queryKey: ['reconciliations', bankAccountId] });
       queryClient.invalidateQueries({ queryKey: ['bankTransactions', bankAccountId] });
       queryClient.invalidateQueries({ queryKey: ['accountingEntries', bankAccountId] });
       
       // Forzar la actualización inmediata de los datos
       queryClient.refetchQueries({ queryKey: ['bankTransactions', bankAccountId] });
-      queryClient.refetchQueries({ queryKey: ['accountingEntries', bankAccountId] });
       
-      // Actualización local inmediata: Filtrar el registro contable conciliado
-      // Esto garantiza que el panel se actualice visualmente incluso antes de que las consultas se completen
-      const accountingEntryId = variables.accountingEntryId;
-      queryClient.setQueryData(['accountingEntries', bankAccountId, filters], (old: AccountingEntry[] | undefined) => {
-        if (!old) return [];
-        return old.filter(entry => entry.id !== accountingEntryId);
-      });
+      // Añadir un efecto visual destacado - resaltar la lista de registros contables
+      const entriesContainer = document.querySelector('.accounting-entries-container');
+      if (entriesContainer) {
+        entriesContainer.classList.add('highlight-updated');
+        setTimeout(() => {
+          entriesContainer.classList.remove('highlight-updated');
+        }, 1000);
+      }
     },
     onError: (error) => {
       // Mostrar notificación de error
@@ -497,38 +534,8 @@ function ReconciliationPanelContent({ bankAccountId, dateRange }: Reconciliation
       queryClient.refetchQueries({ queryKey: ['bankTransactions', bankAccountId] });
       queryClient.refetchQueries({ queryKey: ['accountingEntries', bankAccountId] });
       
-      // Si encontramos la conciliación, actualizar localmente el registro contable para mostrarlo inmediatamente
-      if (matchToDelete && matchToDelete.accounting_entry_id) {
-        // Usamos una función asíncrona autoinvocada para manejar la promesa
-        (async () => {
-          try {
-            // Buscar el registro contable actualizado para añadirlo nuevamente al estado
-            const { data, error } = await supabase
-              .from('accounting_entries')
-              .select('*')
-              .eq('id', matchToDelete.accounting_entry_id)
-              .single();
-            
-            if (error) {
-              throw error;
-            }
-            
-            if (data) {
-              // Actualizar el estado local añadiendo el registro contable nuevamente
-              queryClient.setQueryData(['accountingEntries', bankAccountId, filters], (old: AccountingEntry[] | undefined) => {
-                if (!old) return [data];
-                // Verificar si ya existe para evitar duplicados
-                if (!old.some(e => e.id === data.id)) {
-                  return [...old, data];
-                }
-                return old;
-              });
-            }
-          } catch (error) {
-            console.error('Error al obtener registro contable después de eliminar conciliación:', error);
-          }
-        })();
-      }
+      // Desactivar el uso del estado local para permitir que los datos actualizados se muestren
+      setIsUsingLocalEntries(false);
     }
   });
 
@@ -795,6 +802,8 @@ function ReconciliationPanelContent({ bankAccountId, dateRange }: Reconciliation
       accept: 'TRANSACTION',
       drop: (item: { id: string; type: string }) => {
         if (item.type === 'bank') {
+          console.log('🎯 Drop detectado. Conciliando transacción bancaria con registro contable:',
+                     {txId: item.id, entryId: entry.id});
           createMatchMutation.mutate({
             bankTransactionId: item.id,
             accountingEntryId: entry.id,
@@ -938,8 +947,23 @@ function ReconciliationPanelContent({ bankAccountId, dateRange }: Reconciliation
     );
   };
 
+  // CSS dinámico para el efecto de resaltado
+  const highlightStyle = `
+    @keyframes highlight-pulse {
+      0% { background-color: rgba(79, 70, 229, 0.1); }
+      50% { background-color: rgba(79, 70, 229, 0.2); }
+      100% { background-color: rgba(79, 70, 229, 0.1); }
+    }
+    .highlight-updated {
+      animation: highlight-pulse 1s ease-in-out;
+    }
+  `;
+
   return (
     <div className="p-4 relative">
+      {/* Estilo para animaciones */}
+      <style jsx global>{highlightStyle}</style>
+      
       {/* Barra de herramientas */}
       <div className="mb-6 flex justify-between items-center">
         <div className="flex space-x-4">
@@ -1050,14 +1074,14 @@ function ReconciliationPanelContent({ bankAccountId, dateRange }: Reconciliation
               <div className="text-center py-4">Cargando registros...</div>
             ) : entriesError ? (
               <div className="text-center py-4 text-red-500">Error al cargar registros contables</div>
-            ) : accountingEntries.length === 0 ? (
+            ) : (isUsingLocalEntries ? localAccountingEntries : accountingEntries).length === 0 ? (
               <div className="text-center py-8">
                 <p className="text-gray-500 mb-2">No hay registros contables disponibles para los filtros seleccionados</p>
                 <p className="text-sm text-gray-400">Prueba ajustando el rango de fechas o importa nuevos datos contables</p>
               </div>
             ) : (
-              <div className="space-y-2 h-[600px] overflow-y-auto p-4 custom-scrollbar">
-                {accountingEntries.map((entry) => (
+              <div className="space-y-2 h-[600px] overflow-y-auto p-4 custom-scrollbar accounting-entries-container">
+                {(isUsingLocalEntries ? localAccountingEntries : accountingEntries).map((entry) => (
                   <AccountingEntryItem
                     key={entry.id}
                     entry={entry}
