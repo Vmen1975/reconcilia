@@ -45,7 +45,6 @@ function ReconciliationPanelContent({ bankAccountId, dateRange }: Reconciliation
     type: 'info' | 'success' | 'error' | 'loading';
   } | null>(null);
   const [errorDetails, setErrorDetails] = useState<string | null>(null);
-  const [refreshCountdown, setRefreshCountdown] = useState<number | null>(null);
   const [recentlyReconciledTxs, setRecentlyReconciledTxs] = useState<string[]>([]);
   const [showNotification, setShowNotification] = useState(false);
   const [notificationMessage, setNotificationMessage] = useState('');
@@ -453,11 +452,14 @@ function ReconciliationPanelContent({ bankAccountId, dateRange }: Reconciliation
       
       // Invalidar consultas para actualizar los datos
       queryClient.invalidateQueries({ queryKey: ['reconciliations', bankAccountId] });
+      
+      // Invalidar y refrescar explícitamente tanto transacciones bancarias como registros contables
       queryClient.invalidateQueries({ queryKey: ['bankTransactions', bankAccountId] });
       queryClient.invalidateQueries({ queryKey: ['accountingEntries', bankAccountId] });
       
-      // No usar forceUpdate ni actualizar directamente el estado
-      // Confiar en que la actualización de los datos automáticamente disparará el useEffect
+      // Forzar la actualización inmediata de los datos
+      queryClient.refetchQueries({ queryKey: ['bankTransactions', bankAccountId] });
+      queryClient.refetchQueries({ queryKey: ['accountingEntries', bankAccountId] });
     },
     onError: (error) => {
       // Mostrar notificación de error
@@ -477,12 +479,14 @@ function ReconciliationPanelContent({ bankAccountId, dateRange }: Reconciliation
   const deleteMatchMutation = useMutation({
     mutationFn: reconciliationService.deleteMatch,
     onSuccess: () => {
-      // Sólo invalidar las consultas
+      // Invalidar las consultas
       queryClient.invalidateQueries({ queryKey: ['reconciliations', bankAccountId] });
       queryClient.invalidateQueries({ queryKey: ['bankTransactions', bankAccountId] });
       queryClient.invalidateQueries({ queryKey: ['accountingEntries', bankAccountId] });
       
-      // No actualizar el estado directamente - dejar que el useEffect lo haga
+      // Forzar la actualización inmediata de los datos para ambos paneles
+      queryClient.refetchQueries({ queryKey: ['bankTransactions', bankAccountId] });
+      queryClient.refetchQueries({ queryKey: ['accountingEntries', bankAccountId] });
     }
   });
 
@@ -498,30 +502,33 @@ function ReconciliationPanelContent({ bankAccountId, dateRange }: Reconciliation
     },
     onSuccess: (data) => {
       console.log('✅ Conciliación automática completada:', data);
+      
+      // Invalidar las consultas
       queryClient.invalidateQueries({ queryKey: ['reconciliations', bankAccountId] });
       queryClient.invalidateQueries({ queryKey: ['bankTransactions', bankAccountId] });
       queryClient.invalidateQueries({ queryKey: ['accountingEntries', bankAccountId] });
       
-      // Iniciar cuenta regresiva de 3 segundos
-      setRefreshCountdown(3);
+      // Forzar la actualización inmediata sin recargar la página completa
+      queryClient.refetchQueries({ queryKey: ['reconciliations', bankAccountId] });
+      queryClient.refetchQueries({ queryKey: ['bankTransactions', bankAccountId] });
+      queryClient.refetchQueries({ queryKey: ['accountingEntries', bankAccountId] });
       
+      // Actualizar el mensaje de éxito sin reiniciar los filtros
       setAutoReconciliationStatus({
         message: `Conciliación automática completada. ${data.length} coincidencias encontradas.`,
         type: 'success'
       });
       
-      // Iniciar cuenta regresiva para actualización
-      const countdownInterval = setInterval(() => {
-        setRefreshCountdown(prev => {
-          if (prev === null || prev <= 1) {
-            clearInterval(countdownInterval);
-            // Recargar la página cuando llegue a cero
-            window.location.href = window.location.href;
-            return null;
-          }
-          return prev - 1;
-        });
-      }, 1000);
+      // Mostrar una notificación temporal en lugar de una cuenta regresiva con recarga
+      setNotificationMessage(`¡Conciliación automática completada! ${data.length} coincidencias encontradas.`);
+      setShowNotification(true);
+      
+      // Ocultar notificación después de 5 segundos
+      setTimeout(() => {
+        setShowNotification(false);
+        // Limpiar el mensaje de estado después de la notificación
+        setAutoReconciliationStatus(null);
+      }, 5000);
     },
     onError: (error: any) => {
       console.error('❌ Error en conciliación automática:', error);
@@ -611,18 +618,11 @@ function ReconciliationPanelContent({ bankAccountId, dateRange }: Reconciliation
           </div>
         )}
         {autoReconciliationStatus.type === 'success' && (
-          <div className="flex items-center justify-between">
-            <div className="flex items-center">
-              <svg className="h-5 w-5 text-green-500 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-              </svg>
-              {autoReconciliationStatus.message}
-            </div>
-            {refreshCountdown !== null && (
-              <div className="text-sm font-medium">
-                Actualizando en {refreshCountdown}s...
-              </div>
-            )}
+          <div className="flex items-center">
+            <svg className="h-5 w-5 text-green-500 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+            </svg>
+            {autoReconciliationStatus.message}
           </div>
         )}
         {autoReconciliationStatus.type === 'error' && (
